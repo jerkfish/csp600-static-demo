@@ -1,4 +1,3 @@
-/* Static demo mode: answers the UI's API calls with precomputed data. */
 (function () {
   const D = window.DEMO_DATA;
   const originalFetch = window.fetch.bind(window);
