@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Web prototype for automated resume-job matching with Bi-LSTM models — CSP600 research project.">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#FFF1D7">
+  <title>MatchResume | Automated Resume Evaluation</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='4' y='3' width='16' height='18' rx='3' fill='%23D9500C'/%3E%3Cpath d='M8 9h8M8 13h8M8 17h5' stroke='%23FFF7E8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div style="background:#2F2A33;color:#FFF1D7;text-align:center;padding:9px 16px;font-size:13px;line-height:1.4;border-bottom:1px solid #CBB6C7">Static design preview. Sample scores are precomputed with the interaction-head model. For live scoring, open the <a href="https://huggingface.co/spaces/konata1998/resume-job-matching" style="color:#FFF1D7;text-decoration:underline">Hugging Face Space</a>.</div>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- ==================== STICKY TOP BAR ==================== -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="3" width="16" height="18" rx="3"/>
+            <path d="M8 9h8M8 13h8M8 17h5"/>
+          </svg>
+        </span>
+        <span class="brand-text">
+          <span class="brand-name">Match<span class="brand-accent">Resume</span></span>
+          <span class="brand-sub">Bi-LSTM resume evaluation</span>
+        </span>
+      </div>
+
+      <div class="header-controls">
+        <label class="sr-only" for="modelSelect">Scoring model</label>
+        <div class="select-wrap select-model">
+          <svg class="chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          <select id="modelSelect">
+            <optgroup label="Bi-LSTM variants">
+              <option value="interaction">Bi-LSTM + Interaction head</option>
+              <option value="cosine_05">Bi-LSTM + cosine (0.5 thr.)</option>
+              <option value="cosine_cal">Bi-LSTM + cosine (calibrated 0.25/0.75)</option>
+              <option value="twotower">Bi-LSTM Two-tower (no weight sharing)</option>
+              <option value="hierarchical">Bi-LSTM Hierarchical (word-sent-doc)</option>
+              <option value="adversarial">Bi-LSTM Adversarial (anti keyword-stuffing)</option>
+            </optgroup>
+            <optgroup label="Baselines">
+              <option value="tfidf">TF-IDF + Cosine</option>
+              <option value="word2vec">Word2Vec + Mean Pool</option>
+              <option value="cnn">CNN Encoder</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <button id="spamTestBtn" class="btn btn-warn-demo"
+                title="Fill the inputs with keyword spam and score it with the adversarial model">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6.2L4.7 18a2 2 0 0 0 1.8 3h11a2 2 0 0 0 1.8-3L14 9.2V3"/><path d="M7.5 14h9"/></svg>
+          Test Keyword Stuffing
+          <span class="demo-tag">demo</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN ==================== -->
+  <main id="main" class="container">
+    <div class="intro rise">
+      <!-- <p class="intro-kicker"></p> -->
+      <h1>Resume–Job <span class="grad">Fit Evaluation</span></h1>
+      <p>Score a resume against a job description, or rank a batch of candidates.
+         Six Bi-LSTM variants and three statistical baselines, with calibrated fit
+         thresholds </p> 
+    </div>
+
+    <div class="tabs rise" role="tablist" aria-label="Evaluation mode">
+      <span class="tab-pill" id="tabPill" aria-hidden="true"></span>
+      <button class="tab" id="tab-score" role="tab" data-mode="score"
+              aria-controls="scoreView" aria-selected="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21V3l8 18V3"/></svg>
+        Single-Pair Scoring
+      </button>
+      <button class="tab" id="tab-rank" role="tab" data-mode="rank"
+              aria-controls="rankView" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+        Batch Ranking
+      </button>
+      <button class="tab" id="tab-match" role="tab" data-mode="match"
+              aria-controls="matchView" aria-selected="false" tabindex="-1">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/><path d="M8.5 11h5M11 8.5v5"/></svg>
+        Match My Resume
+      </button>
+    </div>
+
+    <!-- ==================== SINGLE-PAIR SCORING ==================== -->
+    <section id="scoreView" role="tabpanel" aria-labelledby="tab-score" tabindex="0">
+      <div class="panel-grid">
+        <article class="panel rise">
+          <div class="panel-head">
+            <span class="panel-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
+            </span>
+            <h2>Resume</h2>
+            <span class="count-chip" id="resumeCounter" aria-live="off">0 chars</span>
+          </div>
+          <div class="panel-body">
+            <label class="sr-only" for="resumeText">Resume text</label>
+            <textarea id="resumeText" rows="12" spellcheck="false"
+                      placeholder="Paste resume text, or drop a file below…"></textarea>
+
+            <div class="dropzone" id="resumeDrop">
+              <input type="file" id="resumeFile" class="file-input" accept=".txt,.pdf,.docx"
+                     aria-label="Upload resume file (TXT, PDF or DOCX)">
+              <div class="dz-idle">
+                <span class="dz-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m6 9 6-6 6 6"/><path d="M4 20h16"/></svg>
+                </span>
+                <span class="dz-title">Drop resume here or <span class="dz-browse">browse files</span></span>
+                <span class="hint">PDF, DOCX or TXT — text is extracted from the upload.</span>
+              </div>
+              <div class="file-chip d-none">
+                <span class="fc-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+                </span>
+                <span class="fc-name" id="resumeFileName">No file selected</span>
+                <button type="button" class="fc-remove" id="resumeFileRemove" aria-label="Remove resume file">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel rise">
+          <div class="panel-head">
+            <span class="panel-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/></svg>
+            </span>
+            <h2>Job Description</h2>
+            <span class="count-chip" id="jdCounter" aria-live="off">0 chars</span>
+          </div>
+          <div class="panel-body">
+            <label class="sr-only" for="jdText">Job description text</label>
+            <textarea id="jdText" rows="12" spellcheck="false"
+                      placeholder="Paste job description text…"></textarea>
+
+            <div class="dropzone" id="jdDrop">
+              <input type="file" id="jdFile" class="file-input" accept=".txt,.pdf,.docx"
+                     aria-label="Upload job description file (TXT, PDF or DOCX)">
+              <div class="dz-idle">
+                <span class="dz-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m6 9 6-6 6 6"/><path d="M4 20h16"/></svg>
+                </span>
+                <span class="dz-title">Drop job description here or <span class="dz-browse">browse files</span></span>
+                <span class="hint">PDF, DOCX or TXT — text is extracted from the upload.</span>
+              </div>
+              <div class="file-chip d-none">
+                <span class="fc-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+                </span>
+                <span class="fc-name" id="jdFileName">No file selected</span>
+                <button type="button" class="fc-remove" id="jdFileRemove" aria-label="Remove job description file">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <div class="action-row rise">
+        <button id="scoreBtn" class="btn btn-primary btn-ripple">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+          Score Match
+        </button>
+        <label class="sr-only" for="sampleSelect">Load a sample resume and job description</label>
+        <div class="select-wrap">
+          <svg class="chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          <select id="sampleSelect">
+            <option value="">Load sample…</option>
+          </select>
+        </div>
+        <span id="scoreSpinner" class="spinner d-none" role="status" aria-label="Scoring in progress"></span>
+        <span id="scoreStatus" class="status" aria-live="polite"></span>
+      </div>
+
+      <div id="scoreResult" class="d-none">
+        <article class="panel score-panel">
+          <div class="gauge-block">
+            <div class="gauge-wrap" id="fitGaugeWrap" role="img"
+                 aria-label="Fit score gauge, value updates with the score">
+              <svg class="gauge" viewBox="0 0 200 124" aria-hidden="true" focusable="false">
+                <defs>
+                  <!-- Score-band gradients: red (no fit), yellow (potential), green (good). -->
+                  <linearGradient id="gauge-bad" x1="0" y1="1" x2="1" y2="0">
+                    <stop offset="0" stop-color="#8E2A20"/><stop offset="1" stop-color="#E57373"/>
+                  </linearGradient>
+                  <linearGradient id="gauge-mid" x1="0" y1="1" x2="1" y2="0">
+                    <stop offset="0" stop-color="#8A6200"/><stop offset="1" stop-color="#F2C230"/>
+                  </linearGradient>
+                  <linearGradient id="gauge-good" x1="0" y1="1" x2="1" y2="0">
+                    <stop offset="0" stop-color="#1E5A22"/><stop offset="1" stop-color="#66BB6A"/>
+                  </linearGradient>
+                </defs>
+                <path class="gauge-track" d="M20 104 A80 80 0 0 1 180 104"/>
+                <path class="gauge-fill" id="fitGauge" d="M20 104 A80 80 0 0 1 180 104"/>
+              </svg>
+              <div class="gauge-center">
+                <span class="score-caption">Fit Score</span>
+                <span class="score-value" id="fitScore">--</span>
+              </div>
+            </div>
+            <div class="score-badge-row">
+              <span class="badge badge-neutral" id="fitBadge">--</span>
+            </div>
+
+            <div class="meter">
+              <div class="meter-track" id="fitMeter" role="meter" aria-label="Fit score on the 0 to 1 scale"
+                   aria-valuemin="0" aria-valuemax="1" aria-valuenow="0">
+                <span class="meter-fill" id="fitMeterFill" style="width:0%"></span>
+                <span class="meter-mark mk-25" title="No-fit threshold — 0.25"></span>
+                <span class="meter-mark mk-75" title="Good-fit threshold — 0.75"></span>
+                <span class="meter-needle" id="fitNeedle" style="left:0%"></span>
+              </div>
+              <div class="meter-scale" aria-hidden="true">
+                <span class="ms-0">0 · No fit</span>
+                <span class="ms-25">0.25</span>
+                <span class="ms-75">0.75</span>
+                <span class="ms-100">1 · Good fit</span>
+              </div>
+            </div>
+
+            <p class="score-meta">
+              Resume: <strong id="resumeTokCount">0</strong> tokens ·
+              Job description: <strong id="jdTokCount">0</strong> tokens
+            </p>
+
+            <div id="guardrailWarn" class="guardrail d-none" role="alert">
+              <div class="guardrail-head">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 21 20H3z"/><path d="M12 10v4.5"/><path d="M12 17.5h.01"/></svg>
+                Keyword-density guardrail triggered
+              </div>
+              <p>
+                <strong id="densityVal">0%</strong> of this resume consists of its top-10 tokens —
+                a signature of keyword stuffing. The adversarially-trained model is
+                recommended for this input.
+              </p>
+              <div class="guardrail-tokens" id="guardrailTokens"></div>
+            </div>
+          </div>
+        </article>
+
+        <div class="panel-grid panel-grid-results">
+          <article class="panel">
+            <div class="panel-head">
+              <span class="panel-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M7 20v-6"/><path d="M12 20V8"/><path d="M17 20v-10"/></svg>
+              </span>
+              <h2>Section Contribution</h2>
+            </div>
+            <div class="panel-body">
+              <div id="sectionChart" aria-live="polite"></div>
+              <div class="bar-legend" id="barLegend" aria-hidden="true">
+                <span><i class="bar-good"></i>Good fit (&ge; 0.75)</span>
+                <span><i class="bar-mid"></i>Potential (0.25–0.75)</span>
+                <span><i class="bar-low"></i>No fit (&lt; 0.25)</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <span class="panel-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+              </span>
+              <h2>Matching Evidence</h2>
+              <span class="hint">Top attended tokens</span>
+            </div>
+            <div class="panel-body">
+              <ol id="evidenceList" class="evidence-list" aria-live="polite"></ol>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <!-- ==================== RELATED JOBS ==================== -->
+      <section id="relatedJobs" class="panel related-panel d-none" aria-labelledby="relatedTitle">
+        <div class="panel-head">
+          <span class="panel-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/><path d="m9 15 2 2 4-4"/></svg>
+          </span>
+          <h2 id="relatedTitle">Jobs that match this resume</h2>
+          <span class="hint">live first, demo fallback</span>
+        </div>
+        <div class="panel-body">
+          <p class="related-note">
+            Ranked with the currently selected model against live postings
+            (TechStreet jobs API), falling back to the curated
+            <strong>demo dataset</strong> of 40 sample postings — see
+            <code>data/jobs.json</code>.
+          </p>
+          <div id="relatedSkeleton" class="related-grid d-none" aria-hidden="true">
+            <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
+            <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
+            <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
+            <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
+            <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
+            <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
+          </div>
+          <div id="relatedGrid" class="related-grid" role="list"></div>
+          <div id="relatedEmpty" class="related-empty d-none" role="status">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <p>No matching jobs found for this resume. Try pasting a fuller resume.</p>
+          </div>
+          <div id="relatedError" class="related-error d-none" role="alert">
+            <p id="relatedErrorMsg">Could not load related jobs.</p>
+            <button id="relatedRetry" type="button" class="btn btn-ghost">Retry</button>
+          </div>
+          <p class="related-footnote">
+            Demo only — swap the provider function in <code>app.py</code> or replace
+            <code>data/jobs.json</code> to use a live job feed. Match scores reuse the selected model.
+          </p>
+        </div>
+      </section>
+    </section>
+
+    <!-- ==================== BATCH RANKING ==================== -->
+    <section id="rankView" class="d-none" role="tabpanel" aria-labelledby="tab-rank" tabindex="0">
+      <article class="panel">
+        <div class="panel-head">
+          <span class="panel-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/></svg>
+          </span>
+          <h2>Job Description</h2>
+        </div>
+        <div class="panel-body">
+          <label class="sr-only" for="rankJdText">Job description text</label>
+          <textarea id="rankJdText" rows="6" spellcheck="false"
+                    placeholder="Paste job description…"></textarea>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <span class="panel-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
+          </span>
+          <h2>Candidate Resumes</h2>
+          <span class="hint">multi-select</span>
+        </div>
+        <div class="panel-body">
+          <div class="dropzone dropzone-lg" id="rankDrop">
+            <input type="file" id="rankResumeFiles" class="file-input" accept=".txt,.pdf,.docx" multiple
+                   aria-label="Upload multiple resume files (TXT, PDF or DOCX)">
+            <div class="dz-idle">
+              <span class="dz-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m6 9 6-6 6 6"/><path d="M4 20h16"/></svg>
+              </span>
+              <span class="dz-title">Drop files here or <span class="dz-browse">browse</span></span>
+              <span class="hint">TXT · PDF · DOCX — multiple files allowed</span>
+            </div>
+          </div>
+          <ul id="rankFileList" class="file-list" aria-live="polite"></ul>
+          <p class="hint" style="margin:0.6rem 0 0">Select multiple resume files to rank against the job description.</p>
+        </div>
+      </article>
+
+      <div class="action-row">
+        <button id="rankBtn" class="btn btn-primary btn-ripple">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
+          Rank Candidates
+        </button>
+        <button id="exportBtn" class="btn btn-soft">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m6 11 6 6 6-6"/><path d="M4 20h16"/></svg>
+          Export CSV (FR-09)
+        </button>
+        <span id="rankSpinner" class="spinner d-none" role="status" aria-label="Ranking in progress"></span>
+        <span id="rankStatus" class="status" aria-live="polite"></span>
+      </div>
+
+      <div id="rankResult" class="d-none">
+        <div class="table-wrap">
+          <table class="table">
+            <caption class="sr-only">Candidates ranked by fit score</caption>
+            <thead>
+              <tr>
+                <th scope="col">Rank</th>
+                <th scope="col">Resume</th>
+                <th scope="col">
+                  <button type="button" id="sortScoreBtn" class="th-sort" aria-sort="descending">
+                    Fit Score
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>
+                  </button>
+                </th>
+                <th scope="col">Label</th>
+                <th scope="col">Density Flag</th>
+              </tr>
+            </thead>
+            <tbody id="rankTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== MATCH MY RESUME ==================== -->
+    <section id="matchView" class="d-none" role="tabpanel" aria-labelledby="tab-match" tabindex="0">
+      <article class="panel rise">
+        <div class="panel-head">
+          <span class="panel-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/><path d="M8.5 11h5M11 8.5v5"/></svg>
+          </span>
+          <h2>Your Resume</h2>
+          <span class="count-chip" id="matchCounter" aria-live="off">0 chars</span>
+        </div>
+        <div class="panel-body">
+          <label class="sr-only" for="matchResumeText">Resume text</label>
+          <textarea id="matchResumeText" rows="12" spellcheck="false"
+                    placeholder="Paste your resume, or drop a file below…"></textarea>
+
+          <div class="dropzone" id="matchDrop">
+            <input type="file" id="matchResumeFile" class="file-input" accept=".txt,.pdf,.docx"
+                   aria-label="Upload resume file (TXT, PDF or DOCX)">
+            <div class="dz-idle">
+              <span class="dz-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m6 9 6-6 6 6"/><path d="M4 20h16"/></svg>
+              </span>
+              <span class="dz-title">Drop resume here or <span class="dz-browse">browse files</span></span>
+              <span class="hint">PDF, DOCX or TXT — text is extracted from the upload.</span>
+            </div>
+            <div class="file-chip d-none">
+              <span class="fc-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+              </span>
+              <span class="fc-name" id="matchFileName">No file selected</span>
+              <button type="button" class="fc-remove" id="matchFileRemove" aria-label="Remove resume file">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <div class="action-row">
+        <button id="matchBtn" class="btn btn-primary btn-ripple">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          Find Matching Jobs
+        </button>
+        <span id="matchSpinner" class="spinner d-none" role="status" aria-label="Matching in progress"></span>
+        <span id="matchStatus" class="status" aria-live="polite"></span>
+      </div>
+
+      <section id="matchResults" class="panel related-panel d-none" aria-labelledby="matchTitle">
+        <div class="panel-head">
+          <span class="panel-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/><path d="m9 15 2 2 4-4"/></svg>
+          </span>
+          <h2 id="matchTitle">Jobs matching this resume</h2>
+        </div>
+        <div class="panel-body">
+          <p class="related-note">
+            Your resume is searched against live postings first (TechStreet jobs
+            API); if the feed is unreachable the curated demo dataset is used.
+            Each result is scored with the currently selected model.
+          </p>
+          <div id="matchSkeleton" class="related-grid d-none" aria-hidden="true">
+            <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
+            <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
+            <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
+            <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
+            <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
+            <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
+          </div>
+          <div id="matchGrid" class="related-grid" role="list"></div>
+          <div id="matchEmpty" class="related-empty d-none" role="status">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <p>No matching jobs found for this resume. Try pasting a fuller resume.</p>
+          </div>
+          <div id="matchError" class="related-error d-none" role="alert">
+            <p id="matchErrorMsg">Could not find matching jobs.</p>
+            <button id="matchRetry" type="button" class="btn btn-ghost">Retry</button>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p class="footer-project">Automated Resume Evaluation with Job Matching using LSTM Networks</p>
+      <p class="footer-credit">A.Uzair · UiTM BSc Computer Science</p>
+      <p class="footer-contact"><a href="mailto:auzair1990@gmail.com">auzair1990@gmail.com</a></p>
+    </div>
+  </footer>
+
+  <noscript>
+    <div style="max-width:900px;margin:1rem auto;padding:1rem;background:#FFF1D7;border:1px solid #CBB6C7;color:#2F2A33">
+      This prototype requires JavaScript to score resumes.
+    </div>
+  </noscript>
+
+  <!-- ==================== DOCUMENT READING OVERLAY ==================== -->
+  <div id="reader" class="reader-overlay d-none" role="dialog" aria-modal="true"
+       aria-label="Reading and analysing document">
+    <div class="reader-backdrop"></div>
+    <div class="reader-card" role="document">
+      <div class="reader-head">
+        <span class="reader-doc-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></svg>
+        </span>
+        <div class="reader-title-wrap">
+          <strong id="readerTitle">Resume</strong>
+          <span class="reader-sub" id="readerSub">Analysing document</span>
+        </div>
+      </div>
+      <div class="reader-doc" id="readerDocWrap">
+        <span class="scan-line" aria-hidden="true"></span>
+        <pre id="readerDoc"></pre>
+      </div>
+      <div class="reader-foot">
+        <span class="reader-status" id="readerStatus" aria-live="polite">Extracting text…</span>
+        <span class="reader-bar" aria-hidden="true"><i id="readerBarFill"></i></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite"></div>
+
+  <script src="demo-data.js"></script>
+  <script src="demo.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
