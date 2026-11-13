@@ -1477,6 +1477,13 @@ table.table {
 }
 .btn-use-jd:hover { background: var(--accent); color: var(--accent-ink); }
 .btn-use-jd:active { transform: scale(0.97); }
+.btn-use-jd:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: var(--surface);
+  border-color: var(--rule);
+  color: var(--ink-3);
+}
 
 .related-empty, .related-error {
   display: flex;
@@ -1669,4 +1676,50 @@ table.table {
 .job-source-live {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* Job provider badge: shows where the posting came from */
+.job-provider {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 8px;
+  padding: 2px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: #ffffff;
+  vertical-align: middle;
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+  line-height: 1.2;
+}
+
+.job-provider-logo {
+  display: block;
+  height: 14px;
+  width: auto;
+  max-width: 100px;
+}
+
+.job-provider-demo {
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
+.job-provider-demo .job-provider-logo {
+  height: 11px;
+  width: 11px;
+}
+
+
+/* Static preview disclaimer */
+.static-disclaimer {
+  position: relative;
+  z-index: 100;
+  padding: 7px 16px;
+  background: #2A2530;
+  color: #FFF7E8;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.02em;
 }

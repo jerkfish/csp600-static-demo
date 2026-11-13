@@ -776,6 +776,28 @@ bindCounter("matchResumeText", "matchCounter");
 bindDropzone("matchResumeFile", "matchDrop");
 bindFileChip("matchResumeFile", "matchFileName", "matchFileRemove");
 
+const PROVIDER_META = {
+  indeed: { label: "Indeed", logo: "logos/indeed.svg" },
+  techstreet: { label: "TechStreet", logo: "logos/techstreet.svg" },
+  demo: { label: "Demo dataset", logo: "logos/demo.svg" },
+};
+
+function jobProviderChip(job) {
+  const key = job.provider || (job.source === "demo" ? "demo" : "");
+  const meta = PROVIDER_META[key];
+  if (!meta) {
+    return `<span class="job-source">${job.source === "live" ? "Live posting" : "Demo dataset"}</span>`;
+  }
+  if (key === "demo") {
+    return `<span class="job-provider job-provider-demo" title="Curated demo dataset">
+      <img class="job-provider-logo" src="${meta.logo}" alt="" loading="lazy">${meta.label}
+    </span>`;
+  }
+  return `<span class="job-provider" title="Source: ${meta.label}">
+    <img class="job-provider-logo" src="${meta.logo}" alt="${meta.label}" loading="lazy">
+  </span>`;
+}
+
 function renderRelatedCards(jobs, opts = {}) {
   const grid = $(opts.gridId || "relatedGrid");
   if (!grid) return;
@@ -801,6 +823,14 @@ function renderRelatedCards(jobs, opts = {}) {
     const viewBtn = job.link
       ? `<a class="btn-view-job" href="${escapeHtml(job.link)}" target="_blank" rel="noopener noreferrer">View posting</a>`
       : "";
+    const snippet = (job.snippet || "").trim();
+    const snippetHtml = snippet
+      ? `<p class="job-snippet">${escapeHtml(snippet)}</p>`
+      : "";
+    const jdWords = (job.jd_text || "").trim().split(/\s+/).filter(Boolean).length;
+    const useJdBtn = jdWords < 30
+      ? `<button type="button" class="btn-use-jd" disabled title="Full description unavailable — open the posting">Use this JD</button>`
+      : `<button type="button" class="btn-use-jd">Use this JD</button>`;
 
     card.innerHTML = `
       <div class="job-top">
@@ -813,22 +843,23 @@ function renderRelatedCards(jobs, opts = {}) {
           </span>
           ${job.remote ? `<span class="job-remote">Remote</span>` : ""}
           ${salary ? `<span class="job-salary">${escapeHtml(salary)}</span>` : ""}
-          ${job.source === "live" ? `<span class="job-source job-source-live">Live posting</span>` : `<span class="job-source">Demo dataset</span>`}
+          ${jobProviderChip(job)}
         </div>
         <div class="job-match" aria-label="${pct}% match">
           <span class="match-pct">${pct}%</span>
           <span class="match-label">match</span>
         </div>
       </div>
-      <p class="job-snippet">${escapeHtml(job.snippet)}</p>
+      ${snippetHtml}
       <div class="job-skills">${chips}</div>
       <div class="job-actions">
-        <button type="button" class="btn-use-jd">Use this JD</button>
+        ${useJdBtn}
         ${viewBtn}
       </div>`;
 
     // "Use this JD" — copy the description into the JD textarea and re-score.
-    card.querySelector(".btn-use-jd").addEventListener("click", () => {
+    const useJdButton = card.querySelector(".btn-use-jd");
+    if (useJdButton && !useJdButton.disabled) useJdButton.addEventListener("click", () => {
       $("jdText").value = job.jd_text || "";
       updateCounters();
       if (opts.useJdSwitchesTab) switchView("score");

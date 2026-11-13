@@ -6,15 +6,15 @@
   <meta name="description" content="Web prototype for automated resume-job matching with Bi-LSTM models — CSP600 research project.">
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#FFF1D7">
-  <title>MatchResume | Automated Resume Evaluation</title>
+  <title>Automated Resume Evaluation — Bi-LSTM</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='4' y='3' width='16' height='18' rx='3' fill='%23D9500C'/%3E%3Cpath d='M8 9h8M8 13h8M8 17h5' stroke='%23FFF7E8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
+  <div class="static-disclaimer">this is a static page. no model loaded</div>
   <a class="skip-link" href="#main">Skip to content</a>
 
-  <!-- ==================== STICKY TOP BAR ==================== -->
+  
   <header class="site-header">
     <div class="container header-inner">
       <div class="brand">
@@ -61,11 +61,11 @@
     </div>
   </header>
 
-  <!-- ==================== MAIN ==================== -->
+  
   <main id="main" class="container">
     <div class="intro rise">
-      <!-- <p class="intro-kicker"></p> -->
-      <h1>Resume–Job <span class="grad">Fit Evaluation</span></h1>
+      
+      <h1>Resume-Job <span class="grad">Fit Evaluation</span></h1>
       <p>Score a resume against a job description, or rank a batch of candidates.
          Six Bi-LSTM variants and three statistical baselines, with calibrated fit
          thresholds </p> 
@@ -90,7 +90,7 @@
       </button>
     </div>
 
-    <!-- ==================== SINGLE-PAIR SCORING ==================== -->
+    
     <section id="scoreView" role="tabpanel" aria-labelledby="tab-score" tabindex="0">
       <div class="panel-grid">
         <article class="panel rise">
@@ -189,7 +189,7 @@
                  aria-label="Fit score gauge, value updates with the score">
               <svg class="gauge" viewBox="0 0 200 124" aria-hidden="true" focusable="false">
                 <defs>
-                  <!-- Score-band gradients: red (no fit), yellow (potential), green (good). -->
+                  
                   <linearGradient id="gauge-bad" x1="0" y1="1" x2="1" y2="0">
                     <stop offset="0" stop-color="#8E2A20"/><stop offset="1" stop-color="#E57373"/>
                   </linearGradient>
@@ -281,7 +281,7 @@
         </div>
       </div>
 
-      <!-- ==================== RELATED JOBS ==================== -->
+      
       <section id="relatedJobs" class="panel related-panel d-none" aria-labelledby="relatedTitle">
         <div class="panel-head">
           <span class="panel-icon" aria-hidden="true">
@@ -293,9 +293,9 @@
         <div class="panel-body">
           <p class="related-note">
             Ranked with the currently selected model against live postings
-            (TechStreet jobs API), falling back to the curated
-            <strong>demo dataset</strong> of 40 sample postings — see
-            <code>data/jobs.json</code>.
+            from <strong>Indeed</strong> and <strong>TechStreet</strong>,
+            falling back to the curated <strong>demo dataset</strong> of 40
+            sample postings — see <code>data/jobs.json</code>.
           </p>
           <div id="relatedSkeleton" class="related-grid d-none" aria-hidden="true">
             <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
@@ -314,15 +314,11 @@
             <p id="relatedErrorMsg">Could not load related jobs.</p>
             <button id="relatedRetry" type="button" class="btn btn-ghost">Retry</button>
           </div>
-          <p class="related-footnote">
-            Demo only — swap the provider function in <code>app.py</code> or replace
-            <code>data/jobs.json</code> to use a live job feed. Match scores reuse the selected model.
-          </p>
         </div>
       </section>
     </section>
 
-    <!-- ==================== BATCH RANKING ==================== -->
+    
     <section id="rankView" class="d-none" role="tabpanel" aria-labelledby="tab-rank" tabindex="0">
       <article class="panel">
         <div class="panel-head">
@@ -400,7 +396,7 @@
       </div>
     </section>
 
-    <!-- ==================== MATCH MY RESUME ==================== -->
+    
     <section id="matchView" class="d-none" role="tabpanel" aria-labelledby="tab-match" tabindex="0">
       <article class="panel rise">
         <div class="panel-head">
@@ -456,9 +452,10 @@
         </div>
         <div class="panel-body">
           <p class="related-note">
-            Your resume is searched against live postings first (TechStreet jobs
-            API); if the feed is unreachable the curated demo dataset is used.
-            Each result is scored with the currently selected model.
+            Your resume is searched against live postings from
+            <strong>Indeed</strong> and <strong>TechStreet</strong> first. If
+            neither feed is reachable, the curated demo dataset is used. Each
+            result is scored with the currently selected model.
           </p>
           <div id="matchSkeleton" class="related-grid d-none" aria-hidden="true">
             <div class="job-card job-card-skeleton"><span class="skl skl-w60"></span><span class="skl skl-w40"></span><span class="skl skl-w80"></span><span class="skl skl-w90"></span><span class="skl skl-w50"></span></div>
@@ -482,7 +479,7 @@
     </section>
   </main>
 
-  <!-- ==================== FOOTER ==================== -->
+  
   <footer class="site-footer">
     <div class="container footer-inner">
       <p class="footer-project">Automated Resume Evaluation with Job Matching using LSTM Networks</p>
@@ -497,7 +494,7 @@
     </div>
   </noscript>
 
-  <!-- ==================== DOCUMENT READING OVERLAY ==================== -->
+  
   <div id="reader" class="reader-overlay d-none" role="dialog" aria-modal="true"
        aria-label="Reading and analysing document">
     <div class="reader-backdrop"></div>
